@@ -11,6 +11,8 @@ function App() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [filter, setFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("default");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     getTodos();
@@ -22,70 +24,127 @@ function App() {
       setTodos(response.data);
     } catch (error) {
       console.error("Error fetching todos:", error);
+      setErrorMessage("Couldn't load your tasks. Please refresh.");
     }
   };
 
-  const addTodo = async (title) => {
+  // --- ADD (optimistic) ---
+  const addTodo = async (title, dueDate, priority) => {
+    const tempId = `temp-${Date.now()}`;
+
+    const optimisticTodo = {
+      id: tempId,
+      title,
+      isCompleted: false,
+      dueDate: dueDate || null,
+      priority: priority || "medium",
+    };
+
+    // 1. Show it instantly
+    setTodos((prev) => [...prev, optimisticTodo]);
+
     try {
       const todo = {
         title,
         isCompleted: false,
+        dueDate: dueDate || null,
+        priority: priority || "medium",
       };
 
-      await API.post("/todo", todo);
-      getTodos();
+      const response = await API.post("/todo", todo);
+
+      // 2. Swap the fake temp todo for the real one (with the real DB id)
+      setTodos((prev) =>
+        prev.map((t) => (t.id === tempId ? response.data : t))
+      );
     } catch (error) {
       console.error("Error adding todo:", error);
+      setErrorMessage("Failed to add task. Please try again.");
+
+      // 3. Roll back — remove the fake todo since it never actually saved
+      setTodos((prev) => prev.filter((t) => t.id !== tempId));
     }
   };
 
+  // --- EDIT (optimistic) ---
   const editTodo = async (updatedTodo) => {
+    const previousTodos = todos;
+
+    setTodos((prev) =>
+      prev.map((t) => (t.id === updatedTodo.id ? updatedTodo : t))
+    );
+    setEditingTodo(null);
+
     try {
       await API.put(`/todo/${updatedTodo.id}`, updatedTodo);
-      setEditingTodo(null);
-      getTodos();
     } catch (error) {
       console.error("Error editing todo:", error);
+      setErrorMessage("Failed to save changes. Please try again.");
+      setTodos(previousTodos); // roll back
     }
   };
 
+  // --- DELETE (optimistic) ---
   const deleteTodo = async (id) => {
+    const previousTodos = todos;
+
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+
     try {
       await API.delete(`/todo/${id}`);
-      getTodos();
     } catch (error) {
       console.error("Error deleting todo:", error);
+      setErrorMessage("Failed to delete task. Please try again.");
+      setTodos(previousTodos); // roll back
     }
   };
 
+  // --- TOGGLE (optimistic) ---
   const toggleTodo = async (todo) => {
-    try {
-      const updatedTodo = {
-        ...todo,
-        isCompleted: !todo.isCompleted,
-      };
+    const previousTodos = todos;
+    const updatedTodo = { ...todo, isCompleted: !todo.isCompleted };
 
+    setTodos((prev) =>
+      prev.map((t) => (t.id === todo.id ? updatedTodo : t))
+    );
+
+    try {
       await API.put(`/todo/${todo.id}`, updatedTodo);
-      getTodos();
     } catch (error) {
       console.error("Error updating todo:", error);
+      setErrorMessage("Failed to update task. Please try again.");
+      setTodos(previousTodos); // roll back
     }
   };
 
-  const filteredTodos = todos.filter((todo) => {
-    const matchesSearch = todo.title
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
+  const priorityOrder = { high: 0, medium: 1, low: 2 };
 
-    const matchesFilter =
-      filter === "all"
-        ? true
-        : filter === "active"
-          ? !todo.isCompleted
-          : todo.isCompleted;
+  const filteredTodos = todos
+    .filter((todo) => {
+      const matchesSearch = todo.title
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
 
-    return matchesSearch && matchesFilter;
-  });
+      const matchesFilter =
+        filter === "all"
+          ? true
+          : filter === "active"
+            ? !todo.isCompleted
+            : todo.isCompleted;
+
+      return matchesSearch && matchesFilter;
+    })
+    .sort((a, b) => {
+      if (sortBy === "priority") {
+        return priorityOrder[a.priority] - priorityOrder[b.priority];
+      }
+      if (sortBy === "dueDate") {
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate) - new Date(b.dueDate);
+      }
+      return 0;
+    });
 
   const remainingTasks = todos.filter(
     (todo) => !todo.isCompleted
@@ -94,6 +153,13 @@ function App() {
   return (
     <div className="container">
       <Header />
+
+      {errorMessage && (
+        <div className="error-banner">
+          {errorMessage}
+          <button onClick={() => setErrorMessage("")}>✕</button>
+        </div>
+      )}
 
       <TodoForm addTodo={addTodo} />
 
@@ -106,19 +172,16 @@ function App() {
         onChange={(e) => setSearchTerm(e.target.value)}
       />
 
-      <div className="filters">
-        <button onClick={() => setFilter("all")}>
-          All
-        </button>
-
-        <button onClick={() => setFilter("active")}>
-          Active
-        </button>
-
-        <button onClick={() => setFilter("completed")}>
-          Completed
-        </button>
-      </div>
+      {/* Sort */}
+      <select
+        className="sort-select"
+        value={sortBy}
+        onChange={(e) => setSortBy(e.target.value)}
+      >
+        <option value="default">Default order</option>
+        <option value="priority">Sort by Priority</option>
+        <option value="dueDate">Sort by Due Date</option>
+      </select>
 
       {/* Filter Buttons */}
       <div className="filter-buttons">
@@ -157,6 +220,31 @@ function App() {
               })
             }
           />
+
+          <input
+            type="date"
+            value={editingTodo.dueDate || ""}
+            onChange={(e) =>
+              setEditingTodo({
+                ...editingTodo,
+                dueDate: e.target.value,
+              })
+            }
+          />
+
+          <select
+            value={editingTodo.priority || "medium"}
+            onChange={(e) =>
+              setEditingTodo({
+                ...editingTodo,
+                priority: e.target.value,
+              })
+            }
+          >
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
 
           <button onClick={() => editTodo(editingTodo)}>
             Save

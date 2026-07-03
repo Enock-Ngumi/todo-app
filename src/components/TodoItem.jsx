@@ -1,7 +1,17 @@
 function TodoItem({ todo, onDelete, onToggle, onEdit }) {
-  return (
-    <div className="todo-item">
+  const priorityColors = {
+    low: "#8bc34a",
+    medium: "#ffc107",
+    high: "#f44336",
+  };
 
+  const isOverdue =
+    todo.dueDate &&
+    !todo.isCompleted &&
+    new Date(todo.dueDate) < new Date();
+
+  return (
+    <div className={`todo-item ${isOverdue ? "overdue" : ""}`}>
 
       <input
         type="checkbox"
@@ -9,15 +19,34 @@ function TodoItem({ todo, onDelete, onToggle, onEdit }) {
         onChange={() => onToggle(todo)}
       />
 
-
       <span
         className={todo.isCompleted ? "completed" : ""}
       >
-
         {todo.title}
       </span>
 
-      <button onClick={() => onEdit(todo)}>
+      {todo.priority && (
+        <span
+          className="priority-badge"
+          style={{ backgroundColor: priorityColors[todo.priority] }}
+        >
+          {todo.priority}
+        </span>
+      )}
+
+      {todo.dueDate && (
+        <span className="due-date">
+          {isOverdue ? " Overdue: " : "Due: "}
+          {new Date(todo.dueDate).toLocaleDateString()}
+        </span>
+      )}
+
+      <button
+        onClick={() => {
+          console.log(todo);
+          onEdit(todo);
+        }}
+      >
         Edit
       </button>
 
