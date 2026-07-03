@@ -1,0 +1,15 @@
+.todo-item button {
+  border: none;
+  padding: 8px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.todo-item button:first-of-type {
+  background: orange;
+}
+
+.todo-item button:last-of-type {
+  background: crimson;
+  color: white;
+}
