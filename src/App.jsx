@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { useEffect, useState } from "react";
 import Header from "./components/Header";
 import TodoForm from "./components/TodoForm";
@@ -268,6 +269,39 @@ function App() {
         Tasks Remaining: {remainingTasks}
       </h3>
     </div>
+=======
+import { useAuth } from "./context/AuthContext";
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Dashboard from "./pages/Dashboard";
+
+function App() {
+  const { token } = useAuth();
+
+  return (
+    <Routes>
+      <Route
+        path="/"
+        element={<Navigate to={token ? "/dashboard" : "/login"} />}
+      />
+
+      <Route
+        path="/login"
+        element={token ? <Navigate to="/dashboard" /> : <Login />}
+      />
+
+      <Route
+        path="/register"
+        element={token ? <Navigate to="/dashboard" /> : <Register />}
+      />
+
+      <Route
+        path="/dashboard"
+        element={token ? <Dashboard /> : <Navigate to="/login" />}
+      />
+    </Routes>
+>>>>>>> 88b6382 (adding features)
   );
 }
 
